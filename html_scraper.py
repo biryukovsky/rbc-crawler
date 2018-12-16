@@ -1,20 +1,16 @@
 import time
 from urllib.parse import urlparse
-import requests
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
+from utils import get_response, get_body, write_json
 
 
 MAIN_URL = 'https://www.rbc.ru/'
 ua = UserAgent()
 
 
-def get_html(url, headers={}):
-    return requests.get(url, headers=headers).text
-
-
 def get_news_links(url):
-    page = get_html(url, headers={'User-Agent': ua.random})
+    page = get_response(url, headers={'User-Agent': ua.random}).text
     soup = BeautifulSoup(page, 'html.parser')
     links = []
 
@@ -31,30 +27,27 @@ def get_news_links(url):
 def get_news_content(links):
     content = []
     for link in links:
-        news_html = get_html(link, headers={'User-Agent': ua.random})
+        news_html = get_response(link, headers={'User-Agent': ua.random}).text
         soup = BeautifulSoup(news_html, 'html.parser')
         title = soup.find('div', attrs={
             "class": "article__header"
         }).find('div', attrs={
             "class": "article__header__title"
-        }).text
+        }).text.strip()
 
-        article_content = soup.find('div', class_='article__content')
-        body = ''
-        for p in article_content.find_all('p'):
-            body += p.text
+        article = soup.find('div', class_='article__text')
+        body = get_body(article)
         
         path = urlparse(link).path.split('/')
         date = list(filter(lambda e: e.isdigit(), path)) or ''
 
         content.append({
             "title": title,
-            'link': link,
+            'link': link.split('?', 1)[0],
             "date": '.'.join(date),
-            'body': body
+            'body': body,
         })
 
-        # Thanks robots.txt
         time.sleep(1)
 
     return content
@@ -64,3 +57,4 @@ if __name__ == '__main__':
     links = get_news_links(MAIN_URL)
     time.sleep(1)
     content = get_news_content(links)
+    write_json('html_news', content)
